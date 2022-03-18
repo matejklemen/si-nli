@@ -11,6 +11,8 @@ from slo_nli.features.extract_features import AugmentedFeatureExtractionPipeline
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, help="Path to cckres (.vert)",
 					default="/home/matej/Documents/slo_nli/data/raw/cckres.vert")
+parser.add_argument("--target_path", type=str, default="embeddings.csv")
+parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to use as token embeddings")
 parser.add_argument("--device_id", type=int, help="-1 = CPU, otherwise ID of CUDA-capable device",
 					default=-1)
 
@@ -20,7 +22,7 @@ if __name__ == "__main__":
 
 	# Note: use keyword arguments!
 	pipe = AugmentedFeatureExtractionPipeline(
-		task="feature-extraction", use_layers=[-2, -3],
+		task="feature-extraction", use_layers=[args.layer_id],
 		model=AutoModel.from_pretrained("EMBEDDIA/sloberta", output_hidden_states=True),
 		tokenizer=AutoTokenizer.from_pretrained("EMBEDDIA/sloberta"),
 		device=args.device_id,
@@ -35,7 +37,7 @@ if __name__ == "__main__":
 					 axis=1)
 
 	print(f"Writing {data.shape[0]} examples")
-	data.to_csv("embeddings.csv", index=False, sep=",")
+	data.to_csv(args.target_path, index=False, sep=",")
 
 
 
