@@ -1,4 +1,5 @@
 import argparse
+from time import time
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,7 @@ parser.add_argument("--device_id", type=int, help="-1 = CPU, otherwise ID of CUD
 if __name__ == "__main__":
 	args = parser.parse_args()
 	data = load_cckres(args.data_path, preprocess_func=clean_sentence)
+	print(f"Loaded dataset with {data.shape[0]} examples")
 
 	# Note: use keyword arguments!
 	pipe = AugmentedFeatureExtractionPipeline(
@@ -27,16 +29,17 @@ if __name__ == "__main__":
 		tokenizer=AutoTokenizer.from_pretrained("EMBEDDIA/sloberta"),
 		device=args.device_id,
 		framework="pt")
-
+	ts = time()
 	# [num_examples, num_layers, num_tokens, hidden_size]
 	sent_reprs = pipe(data["sentence"].tolist())
 	sent_reprs = np.stack([np.array(curr_emb).mean(axis=0).mean(axis=0) for curr_emb in sent_reprs])
+	te = time()
 
-	data = pd.concat((data,
+	data = pd.concat((data.reset_index(drop=True),
 					  pd.DataFrame(sent_reprs, columns=[f"x_{_idx_feat}" for _idx_feat in range(sent_reprs.shape[1])])),
 					 axis=1)
 
-	print(f"Writing {data.shape[0]} examples")
+	print(f"Took {te - ts: .3f}s... Writing {data.shape[0]} examples")
 	data.to_csv(args.target_path, index=False, sep=",")
 
 
