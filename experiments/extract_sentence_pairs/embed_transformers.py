@@ -1,6 +1,7 @@
 import argparse
 from time import time
 
+import numpy as np
 import pandas as pd
 import torch
 from slo_nli.data.data_loader import load_cckres
@@ -28,6 +29,8 @@ if __name__ == "__main__":
 
 	data = load_cckres(args.data_path, preprocess_func=clean_sentence)
 	print(f"Loaded dataset with {data.shape[0]} examples")
+
+	data = data.loc[np.logical_and(data["num_tokens"] > 10, data["num_tokens"] < 40)].reset_index(drop=True)
 
 	# Note: use keyword arguments!
 	embedder = TransformersEmbedding(pretrained_name_or_path=args.pretrained_name_or_path,
