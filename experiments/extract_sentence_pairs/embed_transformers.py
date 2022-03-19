@@ -1,38 +1,41 @@
 import argparse
 from time import time
 
-import numpy as np
 import pandas as pd
-from transformers import AutoModel, AutoTokenizer
-
+import torch
 from slo_nli.data.data_loader import load_cckres
 from slo_nli.data.preprocessing import clean_sentence
-from slo_nli.features.extract_features import AugmentedFeatureExtractionPipeline
+from slo_nli.features.extract_features import TransformersEmbedding
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, help="Path to cckres (.vert)",
 					default="/home/matej/Documents/slo_nli/data/raw/cckres.vert")
 parser.add_argument("--target_path", type=str, default="embeddings.csv")
-parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to use as token embeddings")
-parser.add_argument("--device_id", type=int, help="-1 = CPU, otherwise ID of CUDA-capable device",
-					default=-1)
+
+parser.add_argument("--pretrained_name_or_path", type=str, default="EMBEDDIA/sloberta")
+parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to use as token embeddings. For example, "
+															 "-1 = last layer.")
+parser.add_argument("--batch_size", type=int, default=32)
+parser.add_argument("--max_length", type=int, default=128, help="Max length of sequences used in transformers")
+
+parser.add_argument("--use_cpu", action="store_true")
 
 if __name__ == "__main__":
 	args = parser.parse_args()
+	if not torch.cuda.is_available():
+		args.use_cpu = True
+		print("Warning: implicitly set '--use_cpu' because no CUDA-capable device could be found")
+
 	data = load_cckres(args.data_path, preprocess_func=clean_sentence)
 	print(f"Loaded dataset with {data.shape[0]} examples")
 
 	# Note: use keyword arguments!
-	pipe = AugmentedFeatureExtractionPipeline(
-		task="feature-extraction", use_layers=[args.layer_id],
-		model=AutoModel.from_pretrained("EMBEDDIA/sloberta", output_hidden_states=True),
-		tokenizer=AutoTokenizer.from_pretrained("EMBEDDIA/sloberta"),
-		device=args.device_id,
-		framework="pt")
+	embedder = TransformersEmbedding(pretrained_name_or_path=args.pretrained_name_or_path,
+									 max_length=args.max_length, batch_size=args.batch_size,
+									 device=("cpu" if args.use_cpu else "cuda"))
+
 	ts = time()
-	# [num_examples, num_layers, num_tokens, hidden_size]
-	sent_reprs = pipe(data["sentence"].tolist())
-	sent_reprs = np.stack([np.array(curr_emb).mean(axis=0).mean(axis=0) for curr_emb in sent_reprs])
+	sent_reprs = embedder.embed_sentences(data["sentence"].tolist(), use_layer=args.layer_id).numpy()
 	te = time()
 
 	data = pd.concat((data.reset_index(drop=True),
@@ -41,12 +44,3 @@ if __name__ == "__main__":
 
 	print(f"Took {te - ts: .3f}s... Writing {data.shape[0]} examples")
 	data.to_csv(args.target_path, index=False, sep=",")
-
-
-
-
-
-
-
-
-
