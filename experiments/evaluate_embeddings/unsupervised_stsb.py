@@ -1,0 +1,96 @@
+import argparse
+import logging
+import os
+import sys
+
+import pandas as pd
+import scipy.stats
+import torch.cuda
+from torch import cosine_similarity
+
+try:
+	from sentence_transformers import SentenceTransformer
+except:
+	raise ImportError(f"run `pip install sentence-transformers`")
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--experiment_dir", type=str, default="debug")
+parser.add_argument("--train_path", help="Required if --combine_train_test is set",
+					default="/home/matej/Documents/paraphrase-nli/experiments/STSB_UTIL/v0-machine-translated/translated.SL.train.tsv")
+parser.add_argument("--test_path",
+					default="/home/matej/Documents/paraphrase-nli/experiments/STSB_UTIL/v0-machine-translated/translated.SL.dev.tsv")
+parser.add_argument("--combine_train_test", action="store_true",
+					help="If set, combines training and test set into one evaluation set. "
+						 "Used in unsupervised case to obtain a better estimate of performance")
+
+parser.add_argument("--representation", choices=["sentence", "mirror", "token"],
+					default="sentence")
+parser.add_argument("--pretrained_name_or_path", type=str,
+					default="distiluse-base-multilingual-cased-v2",
+					help="If representation='sentence', points to the weights of a sentence transformer,"
+						 "if representation='mirror', points to the weights of a mirror-bert model,"
+						 "otherwise, it is a regular huggingface handle")
+parser.add_argument("--batch_size", type=int,
+					default=16)
+parser.add_argument("--max_length", type=int, default=64, help="Used if representation is 'mirror' or 'token'")
+
+parser.add_argument("--use_cpu", action="store_true")
+
+if __name__ == "__main__":
+	torch.manual_seed(17)
+	args = parser.parse_args()
+	if not os.path.exists(args.experiment_dir):
+		os.makedirs(args.experiment_dir)
+
+	device_str = "cpu" if args.use_cpu else "cuda"
+	if not torch.cuda.is_available():
+		args.use_cpu, device_str = True, "cpu"
+		logging.warning("Warning: implicitly set '--use_cpu' because no CUDA-capable device could be found")
+
+	# Set up logging to file and stdout
+	logger = logging.getLogger()
+	logger.setLevel(logging.INFO)
+	for curr_handler in [logging.StreamHandler(sys.stdout),
+						 logging.FileHandler(os.path.join(args.experiment_dir, "experiment.log"))]:
+		curr_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-5.5s]  %(message)s"))
+		logger.addHandler(curr_handler)
+
+	if args.combine_train_test:
+		test_df = pd.concat((
+			pd.read_csv(args.train_path, sep="\t"),
+			pd.read_csv(args.test_path, sep="\t")
+		)).reset_index(drop=True)
+	else:
+		test_df = pd.read_csv(args.test_path, sep="\t")
+
+	seq1, seq2 = test_df["translated.sentence1"].tolist(), test_df["translated.sentence2"].tolist()
+	gt_scores = test_df["score"].values
+	logging.info(f"Loaded {test_df.shape[0]} examples...")
+
+	if args.representation == "sentence":
+		model = SentenceTransformer(args.pretrained_name_or_path, device=device_str)
+		# Obtain a representation for first and second sequences in pairs
+		emb_seq1 = model.encode(seq1, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
+								show_progress_bar=True)
+		emb_seq2 = model.encode(seq2, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
+								show_progress_bar=True)
+	elif args.representation == "mirror":
+		mirror_bert = MirrorBERT()
+		mirror_bert.load_model(path=args.pretrained_name_or_path, use_cuda=(not args.use_cpu))
+		emb_seq1 = mirror_bert.get_embeddings(seq1, agg_mode="cls",
+											  batch_size=args.batch_size, max_length=args.max_length)
+		emb_seq2 = mirror_bert.get_embeddings(seq2, agg_mode="cls",
+											  batch_size=args.batch_size, max_length=args.max_length)
+	else:
+		raise NotImplementedError(args.representation)
+
+	similarities = cosine_similarity(emb_seq1, emb_seq2).cpu().numpy()
+
+	pearson_corr, _ = scipy.stats.pearsonr(similarities, gt_scores)
+	spearman_corr, _ = scipy.stats.spearmanr(similarities, gt_scores)
+
+	test_df["similarity"] = similarities
+	test_df.to_csv(os.path.join(args.experiment_dir, "test_similarities.tsv"), sep="\t", index=False)
+
+	logging.info(f"[Results] PearsonCorr = {pearson_corr:.3f}, SpearmanCorr = {spearman_corr:.3f},"
+				 f"avg = {(pearson_corr + spearman_corr) / 2:.3f}")
