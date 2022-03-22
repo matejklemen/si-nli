@@ -61,7 +61,7 @@ if __name__ == "__main__":
 	emb_seq2 = model.encode(seq2, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
 							show_progress_bar=True)
 
-	similarities = cosine_similarity(emb_seq1, emb_seq2).numpy()
+	similarities = cosine_similarity(emb_seq1, emb_seq2).cpu().numpy()
 
 	pearson_corr, _ = scipy.stats.pearsonr(similarities, gt_scores)
 	spearman_corr, _ = scipy.stats.spearmanr(similarities, gt_scores)
