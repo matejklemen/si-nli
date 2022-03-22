@@ -8,11 +8,6 @@ import scipy.stats
 import torch.cuda
 from torch import cosine_similarity
 
-try:
-	from sentence_transformers import SentenceTransformer
-except:
-	raise ImportError(f"run `pip install sentence-transformers`")
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--experiment_dir", type=str, default="debug")
 parser.add_argument("--train_path", help="Required if --combine_train_test is set",
@@ -22,17 +17,10 @@ parser.add_argument("--test_path",
 parser.add_argument("--combine_train_test", action="store_true",
 					help="If set, combines training and test set into one evaluation set. "
 						 "Used in unsupervised case to obtain a better estimate of performance")
-
-parser.add_argument("--representation", choices=["sentence", "mirror", "token"],
-					default="sentence")
-parser.add_argument("--pretrained_name_or_path", type=str,
-					default="distiluse-base-multilingual-cased-v2",
-					help="If representation='sentence', points to the weights of a sentence transformer,"
-						 "if representation='mirror', points to the weights of a mirror-bert model,"
-						 "otherwise, it is a regular huggingface handle")
+parser.add_argument("--pretrained_name_or_path", type=str, help="Points to the weights of a sentence transformer",
+					default="distiluse-base-multilingual-cased-v2")
 parser.add_argument("--batch_size", type=int,
 					default=16)
-parser.add_argument("--max_length", type=int, default=64, help="Used if representation is 'mirror' or 'token'")
 
 parser.add_argument("--use_cpu", action="store_true")
 
@@ -67,22 +55,17 @@ if __name__ == "__main__":
 	gt_scores = test_df["score"].values
 	logging.info(f"Loaded {test_df.shape[0]} examples...")
 
-	if args.representation == "sentence":
-		model = SentenceTransformer(args.pretrained_name_or_path, device=device_str)
-		# Obtain a representation for first and second sequences in pairs
-		emb_seq1 = model.encode(seq1, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
-								show_progress_bar=True)
-		emb_seq2 = model.encode(seq2, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
-								show_progress_bar=True)
-	elif args.representation == "mirror":
-		mirror_bert = MirrorBERT()
-		mirror_bert.load_model(path=args.pretrained_name_or_path, use_cuda=(not args.use_cpu))
-		emb_seq1 = mirror_bert.get_embeddings(seq1, agg_mode="cls",
-											  batch_size=args.batch_size, max_length=args.max_length)
-		emb_seq2 = mirror_bert.get_embeddings(seq2, agg_mode="cls",
-											  batch_size=args.batch_size, max_length=args.max_length)
-	else:
-		raise NotImplementedError(args.representation)
+	try:
+		from sentence_transformers import SentenceTransformer
+	except:
+		raise ImportError(f"run `pip install sentence-transformers`")
+
+	model = SentenceTransformer(args.pretrained_name_or_path, device=device_str)
+	# Obtain a representation for first and second sequences in pairs
+	emb_seq1 = model.encode(seq1, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
+							show_progress_bar=True)
+	emb_seq2 = model.encode(seq2, batch_size=args.batch_size, device=device_str, convert_to_tensor=True,
+							show_progress_bar=True)
 
 	similarities = cosine_similarity(emb_seq1, emb_seq2).cpu().numpy()
 
