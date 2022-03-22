@@ -29,6 +29,7 @@ parser.add_argument("--batch_size", type=int,
 parser.add_argument("--use_cpu", action="store_true")
 
 if __name__ == "__main__":
+	torch.manual_seed(17)
 	args = parser.parse_args()
 	if not os.path.exists(args.experiment_dir):
 		os.makedirs(args.experiment_dir)
