@@ -4,6 +4,7 @@ from time import time
 import numpy as np
 import pandas as pd
 import torch
+
 from slo_nli.data.data_loader import load_cckres
 from slo_nli.data.preprocessing import clean_sentence
 from slo_nli.features.extract_features import TransformersEmbedding
@@ -13,6 +14,7 @@ parser.add_argument("--data_path", type=str, help="Path to cckres (.vert)",
 					default="/home/matej/Documents/slo_nli/data/raw/cckres.vert")
 parser.add_argument("--target_path", type=str, default="embeddings.csv")
 
+parser.add_argument("--embedding_type", type=str, choices=["word", "sentence"])
 parser.add_argument("--pretrained_name_or_path", type=str, default="EMBEDDIA/sloberta")
 parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to use as token embeddings. For example, "
 															 "-1 = last layer.")
@@ -32,13 +34,22 @@ if __name__ == "__main__":
 
 	data = data.loc[np.logical_and(data["num_tokens"] > 10, data["num_tokens"] < 40)].reset_index(drop=True)
 
-	# Note: use keyword arguments!
-	embedder = TransformersEmbedding(pretrained_name_or_path=args.pretrained_name_or_path,
-									 max_length=args.max_length, batch_size=args.batch_size,
-									 device=("cpu" if args.use_cpu else "cuda"))
-
 	ts = time()
-	sent_reprs = embedder.embed_sentences(data["sentence"].tolist(), use_layer=args.layer_id).numpy()
+	if args.embedding_type == "word":
+		embedder = TransformersEmbedding(pretrained_name_or_path=args.pretrained_name_or_path,
+										 max_length=args.max_length, batch_size=args.batch_size,
+										 device=("cpu" if args.use_cpu else "cuda"))
+
+		sent_reprs = embedder.embed_sentences(data["sentence"].tolist(), use_layer=args.layer_id).numpy()
+	elif args.embedding_type == "sentence":
+		from sentence_transformers import SentenceTransformer
+		model_name = 'LaBSE'
+		model = SentenceTransformer(model_name)
+		sent_reprs = model.encode(data["sentence"].tolist(),
+								  show_progress_bar=True, convert_to_numpy=True, batch_size=args.batch_size)
+	else:
+		raise NotImplementedError(f"--embedding_type='{args.embedding_type}' not supported")
+
 	te = time()
 
 	data = pd.concat((data.reset_index(drop=True),
