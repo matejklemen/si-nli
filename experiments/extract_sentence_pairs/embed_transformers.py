@@ -5,10 +5,11 @@ from multiprocessing import Pool, set_start_method
 from time import time
 from typing import List
 
-import classla
 import numpy as np
 import pandas as pd
+import stanza
 import torch
+from tqdm import tqdm
 
 from slo_nli.data.data_loader import load_cckres
 from slo_nli.data.preprocessing import clean_sentence
@@ -26,19 +27,7 @@ parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to us
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--max_length", type=int, default=128, help="Max length of sequences used in transformers")
 
-parser.add_argument("--num_stanza_processes", type=int, default=1)
 parser.add_argument("--use_cpu", action="store_true")
-
-
-def classla_upos(pipe_data_tup) -> List[set]:
-	pipe, curr_sents = pipe_data_tup
-	curr_tags = []
-	for idx_sent in range(len(curr_sents)):
-		doc = pipe(curr_sents[idx_sent])
-		tags = set([w.upos for w in doc.sentences[0].words])
-		curr_tags.append(tags)
-
-	return curr_tags
 
 
 if __name__ == "__main__":
@@ -55,15 +44,20 @@ if __name__ == "__main__":
 	data = data.loc[np.logical_and(data["num_tokens"] > 10, data["num_tokens"] < 40)].reset_index(drop=True)
 	print(f"After length filtering: {data.shape[0]} examples")
 
-	nlp = classla.Pipeline('sl', processors='tokenize,pos', use_gpu=True, tokenize_no_ssplit=True)
+	nlp = stanza.Pipeline('sl', processors='tokenize,pos', use_gpu=(not args.use_cpu), tokenize_no_ssplit=True)
 
 	ts = time()
-	num_processes = args.num_stanza_processes
-	data_chunks = [data.iloc[curr_indices]["sentence"].tolist()
-				   for curr_indices in np.array_split(np.arange(data.shape[0]), num_processes)]
-	with Pool(num_processes) as pool:
-		upos_tags = list(chain(*pool.map(classla_upos, [(nlp, _curr_data) for _curr_data in data_chunks])))
-	print(f"Classla tagging took {time() - ts:.3f}s (num_processes={num_processes})")
+	upos_tags = []
+	STANZA_BATCH_SIZE = 1024
+	NUM_STANZA_BATCHES = (data.shape[0] + STANZA_BATCH_SIZE - 1) // STANZA_BATCH_SIZE
+	for idx_b in tqdm(range(NUM_STANZA_BATCHES), total=NUM_STANZA_BATCHES):
+		s_b, e_b = idx_b * STANZA_BATCH_SIZE, (idx_b + 1) * STANZA_BATCH_SIZE
+		curr_sents = "\n\n".join(data.iloc[s_b: e_b]["sentence"].tolist())
+		doc = nlp(curr_sents)
+		curr_tags = [set([w.upos for w in curr_sent.words]) for curr_sent in doc.sentences]
+		upos_tags.extend(curr_tags)
+
+	print(f"Stanza tagging took {time() - ts:.3f}s")
 
 	# Filter sentences with "odd" structure
 	mask_valid_sentence = np.zeros(data.shape[0], dtype=bool)
