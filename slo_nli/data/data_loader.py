@@ -27,7 +27,10 @@ def load_cckres(path_to_vert: str,
 
 		sents = curr_doc.find_all("s")
 		for curr_sent in sents:
-			tokens = [line.split("\t")[0] for line in curr_sent.text.strip().split("\n")]
+			tokens = []
+			for token_info in curr_sent.text.strip().split("\n"):
+				parts = token_info.split("\t")
+				tokens.append(parts[0])
 
 			sent_text = eff_prepr_func(" ".join(tokens))
 			if dedup and (sent_text in cached_sents):
