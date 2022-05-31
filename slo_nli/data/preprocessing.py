@@ -1,7 +1,6 @@
 import re
 import string
 from tqdm import tqdm
-import classla
 
 
 def clean_sentence(sent: str):
@@ -18,6 +17,7 @@ def clean_sentence(sent: str):
 
 
 def filter_sentences(sentences: list):
+	import classla
 	# filter candidate sentences based on rules
 	nlp = classla.Pipeline('sl', processors='tokenize,pos', use_gpu=True)
 	candidates = []
