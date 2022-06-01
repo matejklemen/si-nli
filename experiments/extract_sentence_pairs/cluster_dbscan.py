@@ -37,8 +37,8 @@ if __name__ == "__main__":
 
 	candidates = {
 		"cluster_id": [],
+		"premise": [],
 		"hypothesis": [],
-		"premise": []
 	}
 	for cluster_id, items in grouped.items():
 		if len(items) < 2:
@@ -46,8 +46,8 @@ if __name__ == "__main__":
 
 		shuf_indices = np.random.permutation(len(items))
 		candidates["cluster_id"].append(cluster_id)
-		candidates["hypothesis"].append(items[shuf_indices[0]])
-		candidates["premise"].append(items[shuf_indices[1]])
+		candidates["premise"].append(items[shuf_indices[0]])
+		candidates["hypothesis"].append(items[shuf_indices[1]])
 
 	candidates = pd.DataFrame(candidates)
 	print(f"Writing {candidates.shape[0]} candidates to '{args.target_path}'")

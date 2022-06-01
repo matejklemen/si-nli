@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
 	data_path = args.data_path
 	data = pd.read_csv(data_path, sep=",")
-	input_pairs = list(zip(data["source"].tolist(), data["target"].tolist()))
+	input_pairs = list(zip(data["premise"].tolist(), data["hypothesis"].tolist()))
 
 	res = filter_pairs(input_pairs, pretrained_name_or_path=model_handle,
 					   batch_size=args.batch_size, mcd_iters=args.mcd_iters)
