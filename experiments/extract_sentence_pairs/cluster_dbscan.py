@@ -23,7 +23,8 @@ if __name__ == "__main__":
 
 	preprojection = PCA(n_components=args.pca_components).fit_transform(embeddings)
 
-	clusters = DBSCAN(metric="cosine", eps=args.dbscan_eps, min_samples=args.dbscan_minsamples).fit_predict(preprojection)
+	clusters = DBSCAN(metric="cosine", eps=args.dbscan_eps, min_samples=args.dbscan_minsamples,
+					  n_jobs=4).fit_predict(preprojection)
 	grouped = {}
 	for _i, cl in enumerate(clusters):
 		if cl != -1:
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 		"hypothesis": [],
 		"premise": []
 	}
-	for cluster_id, items in clusters.items():
+	for cluster_id, items in grouped.items():
 		if len(items) < 2:
 			continue
 
