@@ -20,9 +20,12 @@ if __name__ == "__main__":
 	if args.sample_size is not None:
 		data = data.sample(n=int(args.sample_size))
 	embeddings = data.iloc[:, 4:].values
+	print(f"Embeddings shape: {embeddings.shape}")
 
+	print(f"Projecting embeddings into lower dim (pca_components={args.pca_components})")
 	preprojection = PCA(n_components=args.pca_components).fit_transform(embeddings)
 
+	print(f"Clustering embeddings (eps={args.dbscan_eps}, min_samples={args.dbscan_minsamples})")
 	clusters = DBSCAN(metric="cosine", eps=args.dbscan_eps, min_samples=args.dbscan_minsamples,
 					  n_jobs=4).fit_predict(preprojection)
 	grouped = {}
