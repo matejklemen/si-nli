@@ -1,4 +1,5 @@
 import argparse
+import os
 from typing import List, Tuple
 
 import pandas as pd
@@ -81,12 +82,15 @@ if __name__ == "__main__":
 	# input_pairs = [pair]
 
 	data_path = args.data_path
+	fname = "".join(args.data_path.split(os.path.sep)[-1].split(".")[:-1])
 	data = pd.read_csv(data_path, sep=",")
 	input_pairs = list(zip(data["premise"].tolist(), data["hypothesis"].tolist()))
 
 	res = filter_pairs(input_pairs, pretrained_name_or_path=model_handle,
 					   batch_size=args.batch_size, mcd_iters=args.mcd_iters)
 	num_examples = len(res["input_pairs"])
+
+	pd.DataFrame(res).to_csv(f"{fname}_auto_annotated.csv", sep=",", index=False)
 
 	for idx_ex in range(num_examples):
 		curr_pair = res["input_pairs"][idx_ex]
