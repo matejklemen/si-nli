@@ -14,7 +14,6 @@ parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--mcd_iters", type=int, default=0)
 
 
-# TODO: pass pairs through NLI model and find if there are certain ones
 def filter_pairs(sentence_pairs: List[Tuple[str, str]], pretrained_name_or_path, batch_size=8, mcd_iters=0):
 	device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 	tokenizer = AutoTokenizer.from_pretrained(pretrained_name_or_path)
@@ -52,7 +51,6 @@ def filter_pairs(sentence_pairs: List[Tuple[str, str]], pretrained_name_or_path,
 	if num_iters > 1:
 		sd_probas = torch.std(pred_probas, dim=0)
 
-	# TODO: find very certain examples
 	argmax_preds = torch.argmax(mean_probas, dim=-1)
 	argmax_mean_probas = mean_probas[torch.arange(argmax_preds.shape[0]), argmax_preds]
 	argmax_sd_probas = sd_probas[torch.arange(argmax_preds.shape[0]), argmax_preds]
@@ -60,7 +58,8 @@ def filter_pairs(sentence_pairs: List[Tuple[str, str]], pretrained_name_or_path,
 	sort_indices = torch.argsort(argmax_mean_probas, descending=True).tolist()
 
 	return {
-		"input_pairs": [sentence_pairs[_i] for _i in sort_indices],
+		"premise": [sentence_pairs[_i][0] for _i in sort_indices],
+		"hypothesis": [sentence_pairs[_i][1] for _i in sort_indices],
 		"preds": argmax_preds[sort_indices].tolist(),
 		"mean_probas": argmax_mean_probas[sort_indices].tolist(),
 		"sd_probas": argmax_sd_probas[sort_indices].tolist()
