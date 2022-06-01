@@ -87,12 +87,12 @@ if __name__ == "__main__":
 
 	res = filter_pairs(input_pairs, pretrained_name_or_path=model_handle,
 					   batch_size=args.batch_size, mcd_iters=args.mcd_iters)
-	num_examples = len(res["input_pairs"])
+	num_examples = len(res["premise"])
 
 	pd.DataFrame(res).to_csv(f"{fname}_auto_annotated.csv", sep=",", index=False)
 
 	for idx_ex in range(num_examples):
-		curr_pair = res["input_pairs"][idx_ex]
+		curr_pair = (res["premise"][idx_ex], res["hypothesis"][idx_ex])
 		pred = res["preds"][idx_ex]
 		mean_proba = res["mean_probas"][idx_ex]
 		sd_proba = res["sd_probas"][idx_ex]
