@@ -49,7 +49,8 @@ if __name__ == "__main__":
 	min_tokens, max_tokens = 10, 40
 	data = data.loc[np.logical_and(data["num_tokens"] > 10, data["num_tokens"] < 40)].reset_index(drop=True)
 	print(f"After length filtering: {data.shape[0]} examples")
-	if args.sample_size is None:
+
+	if args.sample_size is not None:
 		data = data.sample(n=args.sample_size)
 
 	nlp = stanza.Pipeline('sl', processors='tokenize,pos', use_gpu=(not args.use_cpu), tokenize_no_ssplit=True)
