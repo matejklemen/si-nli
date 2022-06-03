@@ -1,9 +1,6 @@
 import argparse
-from itertools import chain
-from multiprocessing import Pool, set_start_method
 
 from time import time
-from typing import List
 
 import numpy as np
 import pandas as pd
@@ -11,15 +8,19 @@ import stanza
 import torch
 from tqdm import tqdm
 
-from slo_nli.data.data_loader import load_cckres
+from slo_nli.data.data_loader import load_cckres, load_parlamint
 from slo_nli.data.preprocessing import clean_sentence
 from slo_nli.features.extract_features import TransformersEmbedding
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_path", type=str, help="Path to cckres (.vert)",
+parser.add_argument("--dataset", type=str, choices=["cckres", "parlamint"], default="cckres")
+parser.add_argument("--data_path", type=str, help="Path to the data. "
+												  "For cckres, this should point to a .vert file."
+												  "For ParlaMint, this should point to the directory containing .txt files.",
 					default="/home/matej/Documents/slo_nli/data/raw/cckres.vert")
 parser.add_argument("--target_path", type=str, default="embeddings.csv")
 
+parser.add_argument("--sample_size", type=int, default=None)
 parser.add_argument("--embedding_type", type=str, choices=["word", "sentence"], default="word")
 parser.add_argument("--pretrained_name_or_path", type=str, default="EMBEDDIA/sloberta")
 parser.add_argument("--layer_id", type=int, default=-1, help="Hidden layer to use as token embeddings. For example, "
@@ -31,18 +32,25 @@ parser.add_argument("--use_cpu", action="store_true")
 
 
 if __name__ == "__main__":
-	set_start_method("spawn")
 	args = parser.parse_args()
 	if not torch.cuda.is_available():
 		args.use_cpu = True
 		print("Warning: implicitly set '--use_cpu' because no CUDA-capable device could be found")
 
-	data = load_cckres(args.data_path, preprocess_func=clean_sentence)
+	if args.dataset == "cckres":
+		data = load_cckres(args.data_path, dedup=True, preprocess_func=clean_sentence)
+	elif args.dataset == "parlamint":
+		data = load_parlamint(args.data_path, dedup=True, preprocess_func=clean_sentence)
+	else:
+		raise NotImplementedError(args.dataset)
+
 	print(f"Loaded dataset with {data.shape[0]} examples")
 
 	min_tokens, max_tokens = 10, 40
 	data = data.loc[np.logical_and(data["num_tokens"] > 10, data["num_tokens"] < 40)].reset_index(drop=True)
 	print(f"After length filtering: {data.shape[0]} examples")
+	if args.sample_size is None:
+		data = data.sample(n=args.sample_size)
 
 	nlp = stanza.Pipeline('sl', processors='tokenize,pos', use_gpu=(not args.use_cpu), tokenize_no_ssplit=True)
 
