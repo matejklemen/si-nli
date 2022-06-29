@@ -41,10 +41,10 @@ def validate_sentence(s):
     deleznik = ('Vmep', 'Vmpp', 'Vmbp', 'Va-p')  # msd startswith
     for msd in xpos:
         if msd.startswith(deleznik):
-            # Premi govor – če poved vsebuje vsaj dva narekovaja in deležnik, se jo izloči.
-            char_counter = Counter(s)
-            if char_counter["\""] > 1 or char_counter["\'"] > 1:  # check for single or double quotes
-                    return False
+            # # Premi govor – če poved vsebuje vsaj dva narekovaja in deležnik, se jo izloči.
+            # char_counter = Counter(s)
+            # if char_counter["\""] > 1 or char_counter["\'"] > 1:  # check for single or double quotes
+            #         return False
 
             # Če poved vsebuje samo deležnik (in nobenega drugega glagola), se jo izloči.
             if upos_counter['VERB'] + upos_counter['AUX'] == 1:
@@ -57,11 +57,7 @@ def validate_sentence(s):
 if __name__ == '__main__':
     nlp = stanza.Pipeline('sl', processors='tokenize,pos', use_gpu=True, tokenize_no_ssplit=True)
 
-    parlamint = '/storage/public/slo-nli-wip/parlamint_candidates_auto_annotated.csv'
-    cckres = '/storage/public/slo-nli-wip/cckres_candidates_auto_annotated.csv'
-
-    df = pd.read_csv(parlamint)
-    df = pd.concat([df, pd.read_csv(cckres)])
+    df = pd.read_csv('/storage/public/slo-nli-wip/parlamint_selected.csv')
 
     filtered = []
     for h, p in tqdm(zip(df['hypothesis'], df['premise'])):
@@ -69,4 +65,4 @@ if __name__ == '__main__':
             filtered.append([h, p])
 
     filtered = pd.DataFrame(filtered, columns=['hypothesis', 'premise'])
-    df.to_csv('filtered-sentence-pairs.csv', index=False)
+    filtered.to_csv('parlamint_selected_filtered.csv', index=False)
