@@ -130,18 +130,19 @@ if __name__ == '__main__':
     nlp = classla.Pipeline('sl', processors='tokenize,pos,ner', use_gpu=True, tokenize_no_ssplit=True)
     lem_sl = Lemmatizer('sl')
 
-    df = pd.read_csv('/storage/public/slo-nli-wip/cckres_selected_filtered.csv')
+    file_name = 'parlamint_selected'
+    df = pd.read_csv(f'/storage/public/slo-nli-wip/{file_name}.csv')
 
-    valid = []
-    invalid = []
-    for h, p in tqdm(zip(df['hypothesis'], df['premise'])):
-        if validate_sentence(h) and validate_sentence(p) and validate_pair(h, p):
-            valid.append([h, p])
+    validity = []
+    for p, h in tqdm(zip(df['premise'], df['hypothesis'])):
+        if validate_sentence(p) and validate_sentence(h) and validate_pair(h, p):
+            validity.append('valid')
         else:
-            invalid.append([h, p])
+            validity.append('invalid')
+    df['validity'] = validity
 
-    valid = pd.DataFrame(valid, columns=['hypothesis', 'premise'])
-    valid.to_csv('cckres_selected_valid.csv', index=False)
-    
-    invalid = pd.DataFrame(invalid, columns=['hypothesis', 'premise'])
-    invalid.to_csv('cckres_selected_invalid.csv', index=False)
+    valid = df[df['validity'] == 'valid']
+    valid.to_csv(f'{file_name}_valid.csv', index=False)
+
+    invalid = df[df['validity'] == 'invalid']
+    invalid.to_csv(f'{file_name}_invalid.csv', index=False)
