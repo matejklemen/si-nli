@@ -1,9 +1,15 @@
+import re
+import string
+
 import pandas as pd
 import classla
-import stanza
+# import stanza
 from collections import Counter
 
+from nltk import word_tokenize
 from tqdm import tqdm
+
+from lemmagen3 import Lemmatizer
 
 
 def validate_sentence(s):
@@ -57,15 +63,85 @@ def validate_sentence(s):
     return True
 
 
+def lemmatize(text):
+    content_lemmatized = []
+    for token in word_tokenize(text, language='slovene'):
+        lemma = lem_sl.lemmatize(token)
+        content_lemmatized.append(lemma.lower())
+    return content_lemmatized
+
+
+def get_entities(text):
+    entities = []
+    annotated_text = nlp(text)
+    for sent in annotated_text.sentences:
+        for ent in sent.entities:
+            entity = ""
+            for t in ent.tokens:
+                if not entity:
+                    entity = t.text
+                else:
+                    entity += " " + t.text
+            entities.append(entity)
+    return entities
+
+
+def validate_pair(h, p, check_numbers=True, check_entities=True):
+    if check_numbers:
+        numbers_h, numbers_p = re.findall('\d+', h), re.findall('\d+', p)
+        for num in numbers_h:
+            if num not in numbers_p:
+                return False
+
+    if check_entities:
+        entities_h, entities_p = get_entities(h), get_entities(p)
+
+        lemma_entities_h = []
+        for entity in entities_h:
+            lemmatized_entity = ""
+            for token in word_tokenize(entity, language='slovene'):
+                if not lemmatized_entity:
+                    lemmatized_entity = token
+                else:
+                    lemmatized_entity += " " + lem_sl.lemmatize(token)
+            lemma_entities_h.append(lemmatized_entity)
+
+        lemma_entities_p = []
+        for entity in entities_p:
+            lemmatized_entity = ""
+            for token in word_tokenize(entity, language='slovene'):
+                if not lemmatized_entity:
+                    lemmatized_entity = token
+                else:
+                    lemmatized_entity += " " + lem_sl.lemmatize(token)
+            lemma_entities_p.append(lemmatized_entity)
+
+        diff = 0
+        for ent in lemma_entities_h:
+            if ent not in lemma_entities_p:
+                diff += 1
+        if diff > 1:
+            return False
+
+    return True
+
+
 if __name__ == '__main__':
-    nlp = stanza.Pipeline('sl', processors='tokenize,pos', use_gpu=True, tokenize_no_ssplit=True)
+    nlp = classla.Pipeline('sl', processors='tokenize,pos,ner', use_gpu=True, tokenize_no_ssplit=True)
+    lem_sl = Lemmatizer('sl')
 
-    df = pd.read_csv('/storage/public/slo-nli-wip/parlamint_selected.csv')
+    df = pd.read_csv('/storage/public/slo-nli-wip/cckres_selected_filtered.csv')
 
-    filtered = []
+    valid = []
+    invalid = []
     for h, p in tqdm(zip(df['hypothesis'], df['premise'])):
-        if validate_sentence(h) and validate_sentence(p):
-            filtered.append([h, p])
+        if validate_sentence(h) and validate_sentence(p) and validate_pair(h, p):
+            valid.append([h, p])
+        else:
+            invalid.append([h, p])
 
-    filtered = pd.DataFrame(filtered, columns=['hypothesis', 'premise'])
-    filtered.to_csv('parlamint_selected_filtered.csv', index=False)
+    valid = pd.DataFrame(valid, columns=['hypothesis', 'premise'])
+    valid.to_csv('cckres_selected_valid.csv', index=False)
+    
+    invalid = pd.DataFrame(invalid, columns=['hypothesis', 'premise'])
+    invalid.to_csv('cckres_selected_invalid.csv', index=False)
