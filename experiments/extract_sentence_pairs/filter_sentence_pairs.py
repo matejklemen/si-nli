@@ -14,7 +14,10 @@ def validate_sentence(s):
 
     # annotate
     doc = nlp(s)
-    assert len(doc.sentences) == 1  # verify that there is one sentence
+
+    # check if there is more than one sentence
+    if len(doc.sentences) > 1:  # verify that there is one sentence
+        return False
 
     # get tags
     upos = [[w.upos for w in sent.words] for sent in doc.sentences][0]
