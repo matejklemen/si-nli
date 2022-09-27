@@ -4,6 +4,7 @@ import os
 import sys
 from argparse import ArgumentParser
 
+import pandas as pd
 import torch
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
 from transformers import AutoTokenizer
@@ -89,6 +90,13 @@ if __name__ == "__main__":
         if hasattr(test_set, "labels"):
             np_labels = test_set.labels.numpy()
             np_pred = test_res["pred_label"].numpy()
+            np_pred_proba = test_res["pred_proba"].numpy()
+
+            # Save predictions to file
+            pred_data = {"pred_label": np_pred}
+            for _lbl, _idx in test_set.label2idx.items():
+                pred_data[f"proba_{_lbl}"] = np_pred_proba[:, _idx]
+            pd.DataFrame(pred_data).to_csv(os.path.join(args.experiment_dir, "predictions.tsv"))
 
             conf_matrix = confusion_matrix(y_true=np_labels, y_pred=np_pred)
             plt.matshow(conf_matrix, cmap="Blues")
@@ -109,31 +117,31 @@ if __name__ == "__main__":
                 "macro_f1": f1_score(y_true=np_labels, y_pred=np_pred, average="macro")
             }
 
-            try:
-                for curr_pos_label, idx_curr_pos in test_set.label2idx.items():
-                    true_bin_labels = (np_labels == idx_curr_pos).astype(np.int32)
-                    pred_bin_labels = (np_pred == idx_curr_pos).astype(np.int32)
+            for curr_pos_label, idx_curr_pos in test_set.label2idx.items():
+                true_bin_labels = (np_labels == idx_curr_pos).astype(np.int32)
+                pred_bin_labels = (np_pred == idx_curr_pos).astype(np.int32)
 
-                    model_metrics[f"precision_{curr_pos_label}"] = precision_score(y_true=np_labels, y_pred=np_pred,
-                                                                                   average="binary")
-                    model_metrics[f"recall_{curr_pos_label}"] = recall_score(y_true=np_labels, y_pred=np_pred,
-                                                                             average="binary")
-                    model_metrics[f"f1_{curr_pos_label}"] = f1_score(y_true=np_labels, y_pred=np_pred,
-                                                                     average="binary")
+                model_metrics[f"precision_{curr_pos_label}"] = precision_score(y_true=true_bin_labels,
+                                                                               y_pred=pred_bin_labels,
+                                                                               average="binary")
+                model_metrics[f"recall_{curr_pos_label}"] = recall_score(y_true=true_bin_labels,
+                                                                         y_pred=pred_bin_labels,
+                                                                         average="binary")
+                model_metrics[f"f1_{curr_pos_label}"] = f1_score(y_true=true_bin_labels,
+                                                                 y_pred=pred_bin_labels,
+                                                                 average="binary")
 
-                    conf_matrix = confusion_matrix(y_true=true_bin_labels, y_pred=pred_bin_labels)
-                    plt.matshow(conf_matrix, cmap="Blues")
-                    for (i, j), v in np.ndenumerate(conf_matrix):
-                        plt.text(j, i, v, ha='center', va='center',
-                                 bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
-                    plt.xticks([0, 1], [f"not_{curr_pos_label}", curr_pos_label])
-                    plt.yticks([0, 1], [f"not_{curr_pos_label}", curr_pos_label])
-                    plt.xlabel("(y_pred)")
+                conf_matrix = confusion_matrix(y_true=true_bin_labels, y_pred=pred_bin_labels)
+                plt.matshow(conf_matrix, cmap="Blues")
+                for (i, j), v in np.ndenumerate(conf_matrix):
+                    plt.text(j, i, v, ha='center', va='center',
+                             bbox=dict(boxstyle='round', facecolor='white', edgecolor='0.3'))
+                plt.xticks([0, 1], [f"not_{curr_pos_label}", curr_pos_label])
+                plt.yticks([0, 1], [f"not_{curr_pos_label}", curr_pos_label])
+                plt.xlabel("(y_pred)")
 
-                    plt.savefig(os.path.join(args.experiment_dir, f"bin_confusion_matrix_{curr_pos_label}.png"))
-                    logging.info(f"Confusion matrix (positive={curr_pos_label}):\n {conf_matrix}")
-            except:
-                pass
+                plt.savefig(os.path.join(args.experiment_dir, f"bin_confusion_matrix_{curr_pos_label}.png"))
+                logging.info(f"Confusion matrix (positive={curr_pos_label}):\n {conf_matrix}")
 
             with open(os.path.join(args.experiment_dir, "metrics.json"), "w") as f_metrics:
                 logging.info(model_metrics)
