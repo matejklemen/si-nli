@@ -7,3 +7,4 @@ sklearn
 numpy
 pandas
 beautifulsoup4
+matplotlib
