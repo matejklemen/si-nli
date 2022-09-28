@@ -96,7 +96,7 @@ if __name__ == "__main__":
             pred_data = {"pred_label": np_pred}
             for _lbl, _idx in test_set.label2idx.items():
                 pred_data[f"proba_{_lbl}"] = np_pred_proba[:, _idx]
-            pd.DataFrame(pred_data).to_csv(os.path.join(args.experiment_dir, "predictions.tsv"))
+            pd.DataFrame(pred_data).to_csv(os.path.join(args.experiment_dir, "predictions.tsv"), index=False, sep="\t")
 
             conf_matrix = confusion_matrix(y_true=np_labels, y_pred=np_pred)
             plt.matshow(conf_matrix, cmap="Blues")
