@@ -24,7 +24,6 @@ parser.add_argument("--dev_path", type=str, help="Path to the validation set")
 parser.add_argument("--test_path", type=str, help="Path to the test set")
 
 parser.add_argument("--num_epochs", type=int, default=3)
-parser.add_argument("--max_seq_len", type=int, default=84)
 parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--learning_rate", type=float, default=2e-5)
 parser.add_argument("--early_stopping_rounds", type=int, default=5)
@@ -61,12 +60,18 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_name_or_path)
     tokenizer.save_pretrained(args.experiment_dir)
 
+    data = pd.read_csv(args.train_path, sep="\t")
+    _encoded = tokenizer.batch_encode_plus(list(zip(data["premise"].tolist(), data["hypothesis"].tolist())))
+    _lengths = sorted(len(_curr) for _curr in _encoded["input_ids"])
+    max_seq_len = _lengths[int(0.99 * len(_lengths))]
+    logging.info(f"Using automatically determined max_seq_len={max_seq_len}")
+
     train_set = SloNLITransformersDataset(args.train_path, tokenizer=tokenizer,
-                                          max_length=args.max_seq_len, return_tensors="pt")
+                                          max_length=max_seq_len, return_tensors="pt")
     dev_set = SloNLITransformersDataset(args.dev_path, tokenizer=tokenizer,
-                                        max_length=args.max_seq_len, return_tensors="pt")
+                                        max_length=max_seq_len, return_tensors="pt")
     test_set = SloNLITransformersDataset(args.test_path, tokenizer=tokenizer,
-                                         max_length=args.max_seq_len, return_tensors="pt")
+                                         max_length=max_seq_len, return_tensors="pt")
 
     logging.info(f"Loaded {len(train_set)} training examples, "
                  f"{len(dev_set)} dev examples and "
@@ -87,16 +92,17 @@ if __name__ == "__main__":
     if test_set is not None:
         trainer = TransformersNLITrainer.from_pretrained(args.experiment_dir)
         test_res = trainer.evaluate(test_set)
+
+        np_pred = test_res["pred_label"].numpy()
+        np_pred_proba = test_res["pred_proba"].numpy()
+        # Save predictions to file
+        pred_data = {"premise": test_set.str_premise, "hypothesis": test_set.str_hypothesis, "pred_label": np_pred}
+        for _lbl, _idx in test_set.label2idx.items():
+            pred_data[f"proba_{_lbl}"] = np_pred_proba[:, _idx]
+
         if hasattr(test_set, "labels"):
             np_labels = test_set.labels.numpy()
-            np_pred = test_res["pred_label"].numpy()
-            np_pred_proba = test_res["pred_proba"].numpy()
-
-            # Save predictions to file
-            pred_data = {"pred_label": np_pred}
-            for _lbl, _idx in test_set.label2idx.items():
-                pred_data[f"proba_{_lbl}"] = np_pred_proba[:, _idx]
-            pd.DataFrame(pred_data).to_csv(os.path.join(args.experiment_dir, "predictions.tsv"), index=False, sep="\t")
+            pred_data["correct_label"] = np_labels
 
             conf_matrix = confusion_matrix(y_true=np_labels, y_pred=np_pred)
             plt.matshow(conf_matrix, cmap="Blues")
@@ -148,5 +154,5 @@ if __name__ == "__main__":
                 json.dump(model_metrics, fp=f_metrics, indent=4)
 
             logging.info(model_metrics)
-        else:
-            logging.info(f"Skipping test set evaluation because no labels were found!")
+
+        pd.DataFrame(pred_data).to_csv(os.path.join(args.experiment_dir, "test_predictions.tsv"), index=False, sep="\t")
