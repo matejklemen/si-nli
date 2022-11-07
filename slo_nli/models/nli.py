@@ -211,3 +211,4 @@ class TransformersNLITrainer:
                 break
 
         logging.info(f"Training took {time() - train_start:.4f}s")
+        logging.info(f"Best {self.optimized_metric}: {best_metric:.4f}")
